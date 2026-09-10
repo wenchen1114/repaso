@@ -236,6 +236,12 @@
   .stat .n.ok { color: var(--ok); }
   .stat .t { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-top: 6px; }
 
+  .star { color: var(--warm); margin-right: 5px; }
+  .imp-label { color: var(--warm); font-weight: 600; font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; margin: -8px 0 16px; }
+  .imp-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--muted); cursor: pointer; margin: 10px 0 0; }
+  .imp-toggle input { accent-color: var(--warm); width: 15px; height: 15px; }
+  .backup { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; font-size: .8rem; color: var(--faint); }
+
   .toolrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
   .search { flex: 1; min-width: 180px; padding: 9px 13px; border: 1.5px solid var(--hair-strong); border-radius: 9px; background: var(--surface); outline: none; }
   .search:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
@@ -342,8 +348,8 @@
   function setStorePill() {
     var d = $("#storepill .d"), t = $("#storetext");
     if (!d) return;
-    if (usingLocal) { d.classList.add("local"); t.textContent = "Saved in this browser only"; }
-    else { d.classList.remove("local"); t.textContent = "Synced to your account"; }
+    if (usingLocal) { d.classList.add("local"); t.textContent = "Saved in this browser only — use Backup ▸ Export / Import to move words between devices"; }
+    else { d.classList.remove("local"); t.textContent = "Synced to your Claude account — open this same link on any device to see every word"; }
   }
 
   function startLocal() {
@@ -374,17 +380,67 @@
     return {
       spanish: w.spanish, english: w.english, note: w.note || "",
       box: 1, createdAt: now, dueAt: now, lastReviewed: null,
-      timesSeen: 0, timesCorrect: 0, streak: 0
+      timesSeen: 0, timesCorrect: 0, streak: 0,
+      important: false, addedTimes: 1
     };
   }
-  async function addWord(w) {
-    var doc = freshDoc(w);
+  function clampBox(b) { b = parseInt(b, 10); return (b >= 1 && b <= MAXBOX) ? b : 0; }
+  function mergeMeanings(existing, incoming) {
+    if (!incoming) return existing;
+    var have = answerList(existing);
+    if (have.indexOf(norm(incoming)) !== -1) return existing;
+    return String(existing) + " / " + String(incoming).trim();
+  }
+  async function insertDoc(doc) {
     if (db) { await db.collection("words").add(doc); }
     else {
       doc.id = "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       state.words.push(doc); saveLocal(); render();
     }
-    return doc;
+  }
+  // A word you re-enter isn't a duplicate to reject — it's one you keep
+  // meeting, so flag it important and put it back at the front of review.
+  async function addOrReinforce(w, forceImportant) {
+    var key = norm(w.spanish);
+    var existing = state.words.find(function (x) { return norm(x.spanish) === key; });
+    if (existing) {
+      var now = Date.now();
+      var times = (existing.addedTimes || 1) + 1;
+      var patch = {
+        important: true, box: 1, dueAt: now, addedTimes: times,
+        english: mergeMeanings(existing.english, w.english)
+      };
+      if (w.note && w.note.trim() && (existing.note || "").indexOf(w.note.trim()) === -1) {
+        patch.note = existing.note ? existing.note + " · " + w.note.trim() : w.note.trim();
+      }
+      await updateWord(existing.id, patch);
+      return { action: "reinforced", spanish: existing.spanish, times: times };
+    }
+    var doc = freshDoc(w);
+    if (forceImportant) doc.important = true;
+    await insertDoc(doc);
+    return { action: "added", spanish: w.spanish };
+  }
+  // Restoring a backup should keep a word's schedule, not punish you for it.
+  async function importWord(w) {
+    var key = norm(w.spanish);
+    var existing = state.words.find(function (x) { return norm(x.spanish) === key; });
+    if (existing) {
+      await updateWord(existing.id, {
+        english: mergeMeanings(existing.english, w.english),
+        important: existing.important || !!w.important
+      });
+      return "reinforced";
+    }
+    var now = Date.now();
+    await insertDoc({
+      spanish: String(w.spanish), english: String(w.english), note: w.note ? String(w.note) : "",
+      box: clampBox(w.box) || 1,
+      createdAt: w.createdAt || now, dueAt: w.dueAt || now, lastReviewed: w.lastReviewed || null,
+      timesSeen: w.timesSeen || 0, timesCorrect: w.timesCorrect || 0, streak: w.streak || 0,
+      important: !!w.important, addedTimes: w.addedTimes || 1
+    });
+    return "added";
   }
   async function updateWord(id, patch) {
     var local = state.words.find(function (x) { return x.id === id; });
@@ -395,6 +451,69 @@
   async function deleteWord(id) {
     if (db) { try { await db.doc("words/" + id).delete(); } catch (e) {} }
     else { state.words = state.words.filter(function (x) { return x.id !== id; }); saveLocal(); render(); }
+  }
+
+  /* ---------- backup / restore ---------- */
+  function backupBarHTML() {
+    return '<div class="backup">' +
+      '<span>Backup</span>' +
+      '<button class="btn sm" id="export-btn">Export JSON</button>' +
+      '<button class="btn sm" id="import-btn2">Import JSON</button>' +
+      '<input type="file" id="import-file" accept="application/json,.json" hidden>' +
+      '<span class="muted" id="backup-msg"></span>' +
+    '</div>';
+  }
+  function setBackupMsg(t) { var m = $("#backup-msg"); if (m) m.textContent = t; }
+  function exportJSON() {
+    var payload = {
+      app: "repaso", version: 1, exportedAt: new Date().toISOString(),
+      words: state.words.map(function (w) {
+        var o = {}; for (var k in w) { if (k !== "id") o[k] = w[k]; } return o;
+      })
+    };
+    var text = JSON.stringify(payload, null, 2);
+    var name = "repaso-words-" + new Date().toISOString().slice(0, 10) + ".json";
+    var c = (typeof window !== "undefined" && window.claude && window.claude.use) ? window.claude : null;
+    if (c) {
+      c.use("downloads").then(function (dl) {
+        if (dl && dl.save) { dl.save({ filename: name, data: text }); setBackupMsg("Saved " + state.words.length + " words to " + name); }
+        else fallbackDownload(name, text);
+      }).catch(function () { fallbackDownload(name, text); });
+    } else {
+      fallbackDownload(name, text);
+    }
+  }
+  function fallbackDownload(name, text) {
+    try {
+      var blob = new Blob([text], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      setBackupMsg("Downloaded " + name);
+    } catch (e) { setBackupMsg("Export isn't available in this browser."); }
+  }
+  function importJSON(file) {
+    var reader = new FileReader();
+    reader.onload = async function () {
+      var data;
+      try { data = JSON.parse(reader.result); }
+      catch (e) { setBackupMsg("Couldn't read that file — pick a Repaso JSON export."); return; }
+      var arr = Array.isArray(data) ? data : (data && data.words);
+      if (!Array.isArray(arr)) { setBackupMsg("No word list found in that file."); return; }
+      setBackupMsg("Importing…");
+      var added = 0, merged = 0;
+      for (var i = 0; i < arr.length; i++) {
+        var w = arr[i];
+        if (!w || !w.spanish || !w.english) continue;
+        var r = await importWord(w);
+        if (r === "added") added++; else merged++;
+      }
+      setBackupMsg("Imported " + added + " new word" + (added === 1 ? "" : "s") +
+        (merged ? ", merged " + merged + " you already had" : "") + ".");
+    };
+    reader.readAsText(file);
   }
 
   /* ---------- helpers ---------- */
@@ -470,6 +589,25 @@
     state.words.forEach(function (w) { set[norm(w.spanish)] = true; });
     return set;
   }
+  function parseBulk(text) {
+    var lines = String(text).split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    var keys = existingKeys(), map = {}, order = [], bad = 0;
+    lines.forEach(function (l) {
+      var p = splitPair(l);
+      if (!p[0] || !p[1]) { bad++; return; }
+      var k = norm(p[0]);
+      if (!map[k]) { map[k] = { spanish: p[0], english: p[1], n: 1 }; order.push(k); }
+      else { map[k].n++; map[k].english = mergeMeanings(map[k].english, p[1]); }
+    });
+    var entries = [], newCount = 0, impCount = 0;
+    order.forEach(function (k) {
+      var e = map[k];
+      e.important = !!(keys[k] || e.n > 1);
+      if (e.important) impCount++; else newCount++;
+      entries.push(e);
+    });
+    return { entries: entries, newCount: newCount, impCount: impCount, bad: bad };
+  }
 
   /* ---------- review session ---------- */
   function startSession(practice) {
@@ -508,9 +646,11 @@
       s.requeue.push(w.id);
     }
     var now = Date.now();
+    // Important words never rest for the full 21 days — cap them at 3 days.
+    var effBox = w.important ? Math.min(box, 3) : box;
     updateWord(w.id, {
       box: box,
-      dueAt: now + INTERVALS[box],
+      dueAt: now + INTERVALS[effBox],
       lastReviewed: now,
       timesSeen: (w.timesSeen || 0) + 1,
       timesCorrect: (w.timesCorrect || 0) + (correct ? 1 : 0),
@@ -628,6 +768,7 @@
 
     var h = '<div class="wrap"><div class="card review">';
     h += pips(w.box || 1);
+    if (w.important) h += '<div class="imp-label">★ Important word</div>';
     h += '<div class="prompt-label label">' + (s.practice ? "Practice · Spanish" : "Spanish") + '</div>';
     h += '<div class="prompt-word">' + esc(w.spanish) + "</div>";
     if (w.note) {
@@ -726,7 +867,8 @@
       if (state.lastAdded.length) {
         h += '<div class="recent"><div class="label" style="margin-bottom:6px">Added this session</div><ul>';
         state.lastAdded.slice(0, 8).forEach(function (w) {
-          h += "<li><span class='es'>" + esc(w.spanish) + "</span><span class='muted'>" + esc(w.english) + "</span></li>";
+          h += "<li>" + (w.reinforced ? '<span class="star">★</span>' : "") +
+            "<span class='es'>" + esc(w.spanish) + "</span><span class='muted'>" + esc(w.english) + "</span></li>";
         });
         h += "</ul></div>";
       }
@@ -734,35 +876,25 @@
       h += '<div class="card">' +
         '<div class="field"><label class="label" for="bulk">Paste words — one per line</label>' +
           '<textarea id="bulk" placeholder="hablar - to speak&#10;la casa - the house&#10;el perro = dog&#10;correr, to run">' + esc(state.bulkText) + "</textarea></div>" +
-        '<p class="helptext">Separate the Spanish word and its meaning with a dash, tab, <span class="mono">=</span>, <span class="mono">:</span>, or a comma. Duplicates you already have are skipped.</p>';
-      var rows = state.bulkText.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
-        var p = splitPair(l);
-        return { spanish: p[0], english: p[1] };
-      });
-      var keys = existingKeys(), seen = {};
-      var okRows = [], dupRows = [], badRows = [];
-      rows.forEach(function (r) {
-        var k = norm(r.spanish);
-        if (!r.spanish || !r.english) badRows.push(r);
-        else if (keys[k] || seen[k]) dupRows.push(r);
-        else { seen[k] = true; okRows.push(r); }
-      });
-      if (rows.length) {
+        '<p class="helptext">Separate the Spanish word and its meaning with a dash, tab, <span class="mono">=</span>, <span class="mono">:</span>, or a comma. A word you already have is marked <span class="star">★</span> important rather than duplicated.</p>';
+      var pb = parseBulk(state.bulkText);
+      var keys2 = existingKeys();
+      if (pb.entries.length || pb.bad) {
         h += '<table class="preview-table"><thead><tr><th>Spanish</th><th>Meaning</th><th></th></tr></thead><tbody>';
-        rows.forEach(function (r) {
-          var k = norm(r.spanish), rowcls = "", tag = "";
-          if (!r.spanish || !r.english) { rowcls = "bad"; tag = '<span class="tag">need both</span>'; }
-          else if (keys[k]) { rowcls = "dup"; tag = '<span class="tag">already saved</span>'; }
-          h += '<tr class="' + rowcls + '"><td class="es">' + esc(r.spanish || "—") + "</td><td>" + esc(r.english || "—") + "</td><td>" + tag + "</td></tr>";
+        pb.entries.forEach(function (e) {
+          var known = keys2[norm(e.spanish)];
+          var tag = e.important
+            ? '<span class="tag">★ ' + (known ? "already have — mark important" : "repeated — mark important") + "</span>"
+            : "";
+          h += '<tr class="' + (e.important ? "dup" : "") + '"><td class="es">' + esc(e.spanish) + "</td><td>" + esc(e.english) + "</td><td>" + tag + "</td></tr>";
         });
         h += "</tbody></table>";
-        h += '<button class="btn primary" id="import-btn"' + (okRows.length ? "" : " disabled") + ">Import " + okRows.length + " word" + (okRows.length === 1 ? "" : "s") + "</button>";
-        if (dupRows.length || badRows.length) {
-          h += '<span class="muted" style="margin-left:10px;font-size:.82rem">' +
-            (dupRows.length ? dupRows.length + " skipped" : "") +
-            (dupRows.length && badRows.length ? " · " : "") +
-            (badRows.length ? badRows.length + " incomplete" : "") + "</span>";
-        }
+        var willSave = pb.entries.length;
+        h += '<button class="btn primary" id="import-btn"' + (willSave ? "" : " disabled") + ">Save " + willSave + " word" + (willSave === 1 ? "" : "s") + "</button>";
+        var notes = [];
+        if (pb.impCount) notes.push(pb.impCount + " marked important");
+        if (pb.bad) notes.push(pb.bad + " skipped (missing a side)");
+        if (notes.length) h += '<span class="muted" style="margin-left:10px;font-size:.82rem">' + notes.join(" · ") + "</span>";
       }
       if (state.toast) h += '<div class="toast">' + esc(state.toast) + "</div>";
       h += "</div>";
@@ -779,14 +911,18 @@
 
     var sf = $("#single-form");
     if (sf) {
-      sf.onsubmit = function (e) {
+      sf.onsubmit = async function (e) {
         e.preventDefault();
         var es = $("#f-es").value.trim(), en = $("#f-en").value.trim(), note = $("#f-note").value.trim();
         if (!es || !en) return;
-        var dup = existingKeys()[norm(es)];
-        addWord({ spanish: es, english: en, note: note });
-        state.lastAdded.unshift({ spanish: es, english: en });
-        state.toast = (dup ? "Added “" + es + "” (you already had one like it)" : "Added “" + es + "”");
+        var res = await addOrReinforce({ spanish: es, english: en, note: note });
+        if (res.action === "reinforced") {
+          state.lastAdded.unshift({ spanish: res.spanish, english: en, reinforced: true });
+          state.toast = "You already had “" + res.spanish + "” — flagged it ★ important (seen " + res.times + "×) and queued it for review now.";
+        } else {
+          state.lastAdded.unshift({ spanish: es, english: en });
+          state.toast = "Added “" + es + "”.";
+        }
         render();
         setTimeout(function () { var f = $("#f-es"); if (f) f.focus(); }, 20);
       };
@@ -800,18 +936,17 @@
     var ib = $("#import-btn");
     if (ib) {
       ib.onclick = async function () {
-        var lines = state.bulkText.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
-        var keys = existingKeys(), seen = {}, toAdd = [];
-        lines.forEach(function (l) {
-          var p = splitPair(l), k = norm(p[0]);
-          if (p[0] && p[1] && !keys[k] && !seen[k]) { seen[k] = true; toAdd.push({ spanish: p[0], english: p[1] }); }
-        });
-        if (!toAdd.length) return;
-        ib.disabled = true; ib.textContent = "Importing…";
-        for (var i = 0; i < toAdd.length; i++) { await addWord(toAdd[i]); }
-        toAdd.forEach(function (w) { state.lastAdded.unshift(w); });
+        var pb = parseBulk(state.bulkText);
+        if (!pb.entries.length) return;
+        ib.disabled = true; ib.textContent = "Saving…";
+        for (var i = 0; i < pb.entries.length; i++) {
+          var e = pb.entries[i];
+          await addOrReinforce({ spanish: e.spanish, english: e.english }, e.important);
+          state.lastAdded.unshift({ spanish: e.spanish, english: e.english, reinforced: e.important });
+        }
         state.bulkText = "";
-        state.toast = "Imported " + toAdd.length + " word" + (toAdd.length === 1 ? "" : "s") + ".";
+        state.toast = "Saved " + pb.entries.length + " word" + (pb.entries.length === 1 ? "" : "s") +
+          (pb.impCount ? " — " + pb.impCount + " marked ★ important." : ".");
         state.addMode = "single";
         render();
       };
@@ -824,6 +959,7 @@
     var total = words.length;
     var due = dueWords().length;
     var mastered = words.filter(function (w) { return (w.box || 1) === MAXBOX; }).length;
+    var important = words.filter(function (w) { return w.important; }).length;
     var seen = words.reduce(function (a, w) { return a + (w.timesSeen || 0); }, 0);
     var corr = words.reduce(function (a, w) { return a + (w.timesCorrect || 0); }, 0);
     var acc = seen ? Math.round((corr / seen) * 100) + "%" : "—";
@@ -844,6 +980,7 @@
         var bb = b.timesSeen ? b.timesCorrect / b.timesSeen : -1;
         return aa - bb;
       }
+      if (sort === "important") return (b.important ? 1 : 0) - (a.important ? 1 : 0) || (a.dueAt || 0) - (b.dueAt || 0);
       return 0;
     });
 
@@ -851,12 +988,14 @@
     h += '<div class="statbar">' +
       '<div class="stat"><div class="n">' + total + '</div><div class="t">Words</div></div>' +
       '<div class="stat"><div class="n warm">' + due + '</div><div class="t">Due now</div></div>' +
+      '<div class="stat"><div class="n warm">' + important + '</div><div class="t">★ Important</div></div>' +
       '<div class="stat"><div class="n ok">' + mastered + '</div><div class="t">Mastered</div></div>' +
       '<div class="stat"><div class="n">' + acc + '</div><div class="t">Accuracy</div></div>' +
     '</div>';
 
     if (!total) {
-      h += '<div class="card center"><p class="muted" style="margin:0">No words yet. <button class="btn sm" data-go="add" style="margin-left:6px">Add some</button></p></div></div>';
+      h += '<div class="card center"><p class="muted" style="margin:0">No words yet. <button class="btn sm" data-go="add" style="margin-left:6px">Add some</button>, or import a backup below.</p></div>' +
+        backupBarHTML() + '</div>';
       app.innerHTML = h;
       bindAll();
       return;
@@ -867,6 +1006,7 @@
       '<select class="sort" id="sort">' +
         opt("recent", "Recently added", sort) +
         opt("alpha", "A – Z", sort) +
+        opt("important", "Important first", sort) +
         opt("box", "Needs work first", sort) +
         opt("due", "Due soonest", sort) +
         opt("accuracy", "Lowest accuracy", sort) +
@@ -884,6 +1024,7 @@
             '<input id="e-en-' + id + '" value="' + esc(w.english) + '" placeholder="English">' +
             '<input class="full" id="e-note-' + id + '" value="' + esc(w.note || "") + '" placeholder="Note (optional)">' +
           '</div>' +
+          '<label class="imp-toggle"><input type="checkbox" id="e-imp-' + id + '"' + (w.important ? " checked" : "") + "> ★ Important — comes back for review at least every few days</label>" +
           '<div class="edit-actions">' +
             '<button class="btn primary sm" data-save="' + id + '">Save</button>' +
             '<button class="btn ghost sm" data-cancel="1">Cancel</button>' +
@@ -894,7 +1035,7 @@
         var acc1 = w.timesSeen ? Math.round((w.timesCorrect / w.timesSeen) * 100) + "%" : "new";
         var dueTxt = (w.dueAt || 0) <= Date.now() ? '<span class="due-now">due now</span>' : "due " + esc(rel(w.dueAt || 0));
         h += '<div class="wrow">' +
-          '<div><div class="es">' + esc(w.spanish) + "</div>" +
+          '<div><div class="es">' + (w.important ? '<span class="star">★</span>' : "") + esc(w.spanish) + "</div>" +
             (w.note ? '<span class="note">' + esc(w.note) + "</span>" : "") + "</div>" +
           '<div class="en">' + esc(w.english) + "</div>" +
           '<div class="meta">' + miniPips(w.box || 1) +
@@ -905,7 +1046,7 @@
         "</div>";
       }
     });
-    h += "</div></div>";
+    h += "</div>" + backupBarHTML() + "</div>";
     app.innerHTML = h;
     bindAll();
   }
@@ -923,13 +1064,20 @@
         var id = b.dataset.save;
         var es = $("#e-es-" + id).value.trim(), en = $("#e-en-" + id).value.trim(), note = $("#e-note-" + id).value.trim();
         if (!es || !en) return;
-        updateWord(id, { spanish: es, english: en, note: note });
+        var impEl = $("#e-imp-" + id);
+        updateWord(id, { spanish: es, english: en, note: note, important: !!(impEl && impEl.checked) });
         state.editingId = null; render();
       };
     });
     app.querySelectorAll("[data-del]").forEach(function (b) {
       b.onclick = function () { deleteWord(b.dataset.del); state.editingId = null; render(); };
     });
+    var eb = $("#export-btn"); if (eb) eb.onclick = exportJSON;
+    var ifb = $("#import-btn2"), ifile = $("#import-file");
+    if (ifb && ifile) {
+      ifb.onclick = function () { ifile.click(); };
+      ifile.onchange = function () { if (ifile.files && ifile.files[0]) importJSON(ifile.files[0]); };
+    }
   }
 
   /* ---------- global events ---------- */
