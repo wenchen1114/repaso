@@ -876,28 +876,9 @@
       h += '<div class="card">' +
         '<div class="field"><label class="label" for="bulk">Paste words — one per line</label>' +
           '<textarea id="bulk" placeholder="hablar - to speak&#10;la casa - the house&#10;el perro = dog&#10;correr, to run">' + esc(state.bulkText) + "</textarea></div>" +
-        '<p class="helptext">Separate the Spanish word and its meaning with a dash, tab, <span class="mono">=</span>, <span class="mono">:</span>, or a comma. A word you already have is marked <span class="star">★</span> important rather than duplicated.</p>';
-      var pb = parseBulk(state.bulkText);
-      var keys2 = existingKeys();
-      if (pb.entries.length || pb.bad) {
-        h += '<table class="preview-table"><thead><tr><th>Spanish</th><th>Meaning</th><th></th></tr></thead><tbody>';
-        pb.entries.forEach(function (e) {
-          var known = keys2[norm(e.spanish)];
-          var tag = e.important
-            ? '<span class="tag">★ ' + (known ? "already have — mark important" : "repeated — mark important") + "</span>"
-            : "";
-          h += '<tr class="' + (e.important ? "dup" : "") + '"><td class="es">' + esc(e.spanish) + "</td><td>" + esc(e.english) + "</td><td>" + tag + "</td></tr>";
-        });
-        h += "</tbody></table>";
-        var willSave = pb.entries.length;
-        h += '<button class="btn primary" id="import-btn"' + (willSave ? "" : " disabled") + ">Save " + willSave + " word" + (willSave === 1 ? "" : "s") + "</button>";
-        var notes = [];
-        if (pb.impCount) notes.push(pb.impCount + " marked important");
-        if (pb.bad) notes.push(pb.bad + " skipped (missing a side)");
-        if (notes.length) h += '<span class="muted" style="margin-left:10px;font-size:.82rem">' + notes.join(" · ") + "</span>";
-      }
-      if (state.toast) h += '<div class="toast">' + esc(state.toast) + "</div>";
-      h += "</div>";
+        '<p class="helptext">Separate the Spanish word and its meaning with a dash, tab, <span class="mono">=</span>, <span class="mono">:</span>, or a comma. A word you already have is marked <span class="star">★</span> important rather than duplicated.</p>' +
+        '<div id="bulk-preview"></div>' +
+      '</div>';
     }
     h += "</div>";
     app.innerHTML = h;
@@ -931,26 +912,54 @@
 
     var bulk = $("#bulk");
     if (bulk) {
-      bulk.oninput = function () { state.bulkText = bulk.value; state.toast = ""; render(); };
+      // Update only the preview node on each keystroke — re-rendering the
+      // whole view here would destroy the textarea and drop focus.
+      bulk.oninput = function () { state.bulkText = bulk.value; renderBulkPreview(); };
+      renderBulkPreview();
     }
+  }
+
+  function renderBulkPreview() {
+    var box = $("#bulk-preview");
+    if (!box) return;
+    var pb = parseBulk(state.bulkText);
+    var keys2 = existingKeys();
+    var h = "";
+    if (pb.entries.length || pb.bad) {
+      h += '<table class="preview-table"><thead><tr><th>Spanish</th><th>Meaning</th><th></th></tr></thead><tbody>';
+      pb.entries.forEach(function (e) {
+        var known = keys2[norm(e.spanish)];
+        var tag = e.important
+          ? '<span class="tag">★ ' + (known ? "already have — mark important" : "repeated — mark important") + "</span>"
+          : "";
+        h += '<tr class="' + (e.important ? "dup" : "") + '"><td class="es">' + esc(e.spanish) + "</td><td>" + esc(e.english) + "</td><td>" + tag + "</td></tr>";
+      });
+      h += "</tbody></table>";
+      var willSave = pb.entries.length;
+      h += '<button class="btn primary" id="import-btn"' + (willSave ? "" : " disabled") + ">Save " + willSave + " word" + (willSave === 1 ? "" : "s") + "</button>";
+      var notes = [];
+      if (pb.impCount) notes.push(pb.impCount + " marked important");
+      if (pb.bad) notes.push(pb.bad + " skipped (missing a side)");
+      if (notes.length) h += '<span class="muted" style="margin-left:10px;font-size:.82rem">' + notes.join(" · ") + "</span>";
+    }
+    box.innerHTML = h;
     var ib = $("#import-btn");
-    if (ib) {
-      ib.onclick = async function () {
-        var pb = parseBulk(state.bulkText);
-        if (!pb.entries.length) return;
-        ib.disabled = true; ib.textContent = "Saving…";
-        for (var i = 0; i < pb.entries.length; i++) {
-          var e = pb.entries[i];
-          await addOrReinforce({ spanish: e.spanish, english: e.english }, e.important);
-          state.lastAdded.unshift({ spanish: e.spanish, english: e.english, reinforced: e.important });
-        }
-        state.bulkText = "";
-        state.toast = "Saved " + pb.entries.length + " word" + (pb.entries.length === 1 ? "" : "s") +
-          (pb.impCount ? " — " + pb.impCount + " marked ★ important." : ".");
-        state.addMode = "single";
-        render();
-      };
-    }
+    if (!ib) return;
+    ib.onclick = async function () {
+      var pb2 = parseBulk(state.bulkText);
+      if (!pb2.entries.length) return;
+      ib.disabled = true; ib.textContent = "Saving…";
+      for (var i = 0; i < pb2.entries.length; i++) {
+        var e = pb2.entries[i];
+        await addOrReinforce({ spanish: e.spanish, english: e.english }, e.important);
+        state.lastAdded.unshift({ spanish: e.spanish, english: e.english, reinforced: e.important });
+      }
+      state.bulkText = "";
+      state.toast = "Saved " + pb2.entries.length + " word" + (pb2.entries.length === 1 ? "" : "s") +
+        (pb2.impCount ? " — " + pb2.impCount + " marked ★ important." : ".");
+      state.addMode = "single";
+      render();
+    };
   }
 
   /* ---------- all words ---------- */
