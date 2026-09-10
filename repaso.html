@@ -1,0 +1,958 @@
+<title>Repaso</title>
+<meta name="description" content="A spaced-repetition notebook for Spanish words from class.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ground: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #fafbfc;
+    --ink: #1b1f2a;
+    --muted: #5b6172;
+    --faint: #8a90a0;
+    --hair: #e4e6eb;
+    --hair-strong: #d4d7df;
+    --accent: #3b4ce0;
+    --accent-soft: #eef0fd;
+    --warm: #c9791b;
+    --warm-soft: #fbefdf;
+    --ok: #1f9d63;
+    --ok-soft: #e6f4ec;
+    --bad: #d24435;
+    --bad-soft: #fbeae8;
+    --shadow: 0 1px 2px rgba(20, 24, 40, .04), 0 8px 24px -12px rgba(20, 24, 40, .12);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101219;
+      --surface: #1a1d26;
+      --surface-2: #20242f;
+      --ink: #eceef3;
+      --muted: #9aa0b0;
+      --faint: #6d7384;
+      --hair: #2a2e3a;
+      --hair-strong: #363b49;
+      --accent: #7b87f2;
+      --accent-soft: #232744;
+      --warm: #e6a04a;
+      --warm-soft: #33291a;
+      --ok: #43c088;
+      --ok-soft: #172a22;
+      --bad: #f0685c;
+      --bad-soft: #2e1f1e;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 30px -14px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101219;
+    --surface: #1a1d26;
+    --surface-2: #20242f;
+    --ink: #eceef3;
+    --muted: #9aa0b0;
+    --faint: #6d7384;
+    --hair: #2a2e3a;
+    --hair-strong: #363b49;
+    --accent: #7b87f2;
+    --accent-soft: #232744;
+    --warm: #e6a04a;
+    --warm-soft: #33291a;
+    --ok: #43c088;
+    --ok-soft: #172a22;
+    --bad: #f0685c;
+    --bad-soft: #2e1f1e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 30px -14px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, "Times New Roman", serif; font-weight: 500; margin: 0; text-wrap: balance; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, textarea { font: inherit; color: inherit; }
+  ::selection { background: var(--accent-soft); }
+
+  .appbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--hair);
+  }
+  .appbar-inner {
+    max-width: 1000px; margin: 0 auto; padding: 12px 20px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .brand {
+    font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.2rem;
+    letter-spacing: .01em; display: flex; align-items: baseline; gap: 8px; margin-right: auto;
+  }
+  .brand .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warm); display: inline-block; }
+  .brand small { font-family: "Hanken Grotesk", sans-serif; font-weight: 500; font-size: .68rem; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); }
+  .nav { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 3px; }
+  .nav button {
+    border: 0; background: transparent; color: var(--muted);
+    padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: .82rem;
+    display: flex; align-items: center; gap: 7px; transition: background .15s, color .15s;
+  }
+  .nav button:hover { color: var(--ink); }
+  .nav button[aria-current="true"] { background: var(--accent-soft); color: var(--accent); }
+  .nav .count {
+    font-family: "IBM Plex Mono", monospace; font-size: .7rem; font-weight: 500;
+    background: var(--warm); color: #fff; border-radius: 999px; padding: 1px 6px; min-width: 18px; text-align: center;
+  }
+  :root[data-theme="dark"] .nav .count, :root:not([data-theme="light"]) .nav .count { color: #1b1205; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 28px 20px 80px; }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  .wide { max-width: 1000px; }
+
+  .label { font-size: .68rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+  .mono { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .center { text-align: center; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 30px;
+  }
+
+  /* review card */
+  .review { text-align: center; }
+  .pips { display: flex; gap: 6px; justify-content: center; margin-bottom: 22px; }
+  .pip { width: 26px; height: 5px; border-radius: 3px; background: var(--hair-strong); }
+  .pip.on { background: var(--accent); }
+  .pip.max { background: var(--warm); }
+  .prompt-label { margin-bottom: 10px; }
+  .prompt-word {
+    font-family: "Fraunces", Georgia, serif; font-weight: 500;
+    font-size: clamp(2.1rem, 7vw, 3.1rem); line-height: 1.1; margin-bottom: 6px;
+    font-optical-sizing: auto;
+  }
+  .hintbtn {
+    background: transparent; border: 0; color: var(--accent); font-weight: 600; font-size: .82rem;
+    text-decoration: underline; text-underline-offset: 3px; margin-top: 4px;
+  }
+  .hint { margin-top: 10px; color: var(--muted); font-style: italic; }
+  form.answer-form { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+  .textin {
+    width: 100%; padding: 13px 15px; border: 1.5px solid var(--hair-strong); border-radius: 10px;
+    background: var(--surface-2); text-align: center; font-size: 1.05rem; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .textin:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+
+  .btn {
+    border: 1px solid var(--hair-strong); background: var(--surface); color: var(--ink);
+    padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: .9rem;
+    transition: background .15s, border-color .15s, transform .05s;
+  }
+  .btn:hover { border-color: var(--faint); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .btn.primary, :root:not([data-theme="light"]) .btn.primary { color: #0e1020; }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: var(--bad); border-color: transparent; background: transparent; padding: 6px 10px; }
+  .btn.danger:hover { background: var(--bad-soft); border-color: transparent; }
+  .btn.sm { padding: 7px 12px; font-size: .82rem; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  .result { margin-top: 22px; border-radius: 12px; padding: 18px; text-align: left; }
+  .result.ok { background: var(--ok-soft); }
+  .result.bad { background: var(--bad-soft); }
+  .result.close { background: var(--warm-soft); }
+  .result-head { font-family: "Fraunces", serif; font-size: 1.15rem; margin-bottom: 8px; }
+  .result.ok .result-head { color: var(--ok); }
+  .result.bad .result-head { color: var(--bad); }
+  .result.close .result-head { color: var(--warm); }
+  .result .row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: .92rem; }
+  .result .row .k { color: var(--muted); min-width: 66px; }
+  .result .answer { font-weight: 600; }
+  .result .note { margin-top: 8px; font-style: italic; color: var(--muted); font-size: .88rem; }
+  .result .confirm { margin-top: 14px; display: flex; gap: 10px; }
+  .result.mini { margin-top: 14px; font-size: .86rem; }
+
+  .rev-meta { margin-top: 20px; display: flex; justify-content: center; gap: 16px; font-size: .78rem; color: var(--faint); }
+  .progress { height: 4px; background: var(--hair); border-radius: 3px; overflow: hidden; margin-top: 14px; }
+  .progress > i { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+
+  /* empty / info states */
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .empty { text-align: center; padding: 8px 0; }
+  .empty h2 { font-size: 1.6rem; margin-bottom: 10px; }
+  .empty p { color: var(--muted); max-width: 46ch; margin: 0 auto 20px; }
+  .example { position: relative; margin-top: 26px; opacity: .92; }
+  .ex-tag {
+    position: absolute; top: 12px; right: 14px; font-size: .62rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); border: 1px solid var(--hair); border-radius: 6px; padding: 2px 6px;
+  }
+
+  /* add view */
+  .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--hair); border-radius: 10px; padding: 3px; margin-bottom: 20px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); font-weight: 600; font-size: .82rem; padding: 7px 14px; border-radius: 7px; }
+  .seg button[aria-current="true"] { background: var(--accent-soft); color: var(--accent); }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; text-align: left; }
+  .field input, .field textarea {
+    width: 100%; padding: 11px 13px; border: 1.5px solid var(--hair-strong); border-radius: 9px;
+    background: var(--surface-2); outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .field textarea { min-height: 150px; resize: vertical; font-family: "IBM Plex Mono", monospace; font-size: .86rem; line-height: 1.7; }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .helptext { font-size: .82rem; color: var(--muted); margin: -4px 0 14px; }
+  .toast {
+    margin-top: 14px; padding: 10px 14px; border-radius: 9px; background: var(--ok-soft); color: var(--ok);
+    font-weight: 600; font-size: .86rem; text-align: left;
+  }
+  .recent { margin-top: 22px; }
+  .recent li { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--hair); font-size: .9rem; }
+  .recent li:first-child { border-top: 0; }
+  .recent .es { font-family: "Fraunces", serif; font-weight: 500; }
+  ul { list-style: none; margin: 0; padding: 0; }
+
+  .preview-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .88rem; }
+  .preview-table th { text-align: left; font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 6px 8px; border-bottom: 1px solid var(--hair); }
+  .preview-table td { padding: 7px 8px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .preview-table td.es { font-family: "Fraunces", serif; font-weight: 500; }
+  .preview-table tr.bad td { color: var(--bad); }
+  .preview-table tr.dup td { color: var(--faint); }
+  .tag { font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; padding: 1px 6px; border-radius: 5px; background: var(--hair); color: var(--muted); }
+
+  /* all words */
+  .statbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat { flex: 1; min-width: 120px; background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; }
+  .stat .n { font-family: "Fraunces", serif; font-size: 1.7rem; line-height: 1; }
+  .stat .n.warm { color: var(--warm); }
+  .stat .n.ok { color: var(--ok); }
+  .stat .t { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-top: 6px; }
+
+  .toolrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .search { flex: 1; min-width: 180px; padding: 9px 13px; border: 1.5px solid var(--hair-strong); border-radius: 9px; background: var(--surface); outline: none; }
+  .search:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  select.sort { padding: 9px 12px; border: 1.5px solid var(--hair-strong); border-radius: 9px; background: var(--surface); outline: none; font-weight: 500; }
+
+  .wordlist { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .wrow { display: grid; grid-template-columns: 1.1fr 1.3fr auto; gap: 14px; padding: 14px 18px; border-top: 1px solid var(--hair); align-items: center; }
+  .wrow:first-child { border-top: 0; }
+  .wrow .es { font-family: "Fraunces", serif; font-weight: 500; font-size: 1.05rem; }
+  .wrow .en { color: var(--muted); }
+  .wrow .note { display: block; font-size: .8rem; color: var(--faint); font-style: italic; margin-top: 2px; }
+  .wrow .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; font-size: .74rem; color: var(--faint); }
+  .minipips { display: flex; gap: 3px; }
+  .minipip { width: 14px; height: 4px; border-radius: 2px; background: var(--hair-strong); }
+  .minipip.on { background: var(--accent); }
+  .minipip.max { background: var(--warm); }
+  .due-now { color: var(--warm); font-weight: 600; }
+  .wrow .acts { display: flex; gap: 4px; }
+  .icon-btn { border: 0; background: transparent; color: var(--faint); padding: 5px; border-radius: 7px; font-size: .8rem; }
+  .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+  .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .edit-grid input { padding: 9px 11px; border: 1.5px solid var(--hair-strong); border-radius: 8px; background: var(--surface-2); outline: none; width: 100%; }
+  .edit-grid .full { grid-column: 1 / -1; }
+  .edit-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+  footer { max-width: 1000px; margin: 0 auto; padding: 0 20px 40px; }
+  .storepill { display: inline-flex; align-items: center; gap: 7px; font-size: .74rem; color: var(--faint); }
+  .storepill .d { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .storepill .d.local { background: var(--warm); }
+
+  .skeleton { height: 220px; border-radius: var(--radius); background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%); background-size: 200% 100%; animation: sh 1.4s infinite; border: 1px solid var(--hair); }
+  @keyframes sh { to { background-position: -200% 0; } }
+
+  @media (max-width: 560px) {
+    .wrow { grid-template-columns: 1fr auto; }
+    .wrow .en { grid-column: 1 / -1; }
+    .card { padding: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+
+<div class="appbar">
+  <div class="appbar-inner">
+    <div class="brand"><span class="dot"></span>Repaso <small>Spanish&nbsp;words</small></div>
+    <nav class="nav" id="nav">
+      <button data-route="review" aria-current="true">Repaso <span class="count" id="dueCount" hidden>0</span></button>
+      <button data-route="add">Add</button>
+      <button data-route="all">All words</button>
+    </nav>
+  </div>
+</div>
+
+<main id="app"><div class="wrap"><div class="skeleton"></div></div></main>
+
+<footer>
+  <span class="storepill" id="storepill"><span class="d"></span><span id="storetext">Connecting…</span></span>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var DAY = 86400000;
+  var INTERVALS = { 1: 600000, 2: DAY, 3: 3 * DAY, 4: 7 * DAY, 5: 21 * DAY };
+  var MAXBOX = 5;
+  var BOXNAME = ["", "Learning", "Getting it", "Familiar", "Strong", "Mastered"];
+  var LKEY = "repaso.words.v1";
+  var RKEY = "repaso.route";
+
+  var db = null, usingLocal = false;
+  var state = {
+    route: "review",
+    words: [],
+    loaded: false,
+    session: null,
+    addMode: "single",
+    lastAdded: [],
+    bulkText: "",
+    search: "",
+    sort: "recent",
+    editingId: null,
+    toast: ""
+  };
+
+  try { var r = localStorage.getItem(RKEY); if (r) state.route = r; } catch (e) {}
+
+  var app = document.getElementById("app");
+  var esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  var $ = function (sel, root) { return (root || document).querySelector(sel); };
+
+  /* ---------- storage ---------- */
+  function loadLocal() {
+    try { state.words = JSON.parse(localStorage.getItem(LKEY) || "[]"); }
+    catch (e) { state.words = []; }
+  }
+  function saveLocal() {
+    try { localStorage.setItem(LKEY, JSON.stringify(state.words)); } catch (e) {}
+  }
+  function setStorePill() {
+    var d = $("#storepill .d"), t = $("#storetext");
+    if (!d) return;
+    if (usingLocal) { d.classList.add("local"); t.textContent = "Saved in this browser only"; }
+    else { d.classList.remove("local"); t.textContent = "Synced to your account"; }
+  }
+
+  function startLocal() {
+    usingLocal = true; loadLocal(); state.loaded = true; setStorePill(); render();
+  }
+
+  async function initStorage() {
+    var claudeObj = (typeof window !== "undefined" && window.claude && typeof window.claude.use === "function") ? window.claude : null;
+    if (!claudeObj) { startLocal(); return; }
+    try { db = await claudeObj.use("db"); } catch (e) { db = null; }
+    if (!db) { startLocal(); return; }
+    setStorePill();
+    try {
+      db.collection("words").onSnapshot(function (snap) {
+        state.words = snap.docs.map(function (d) {
+          var o = d.data() || {}; o.id = d.id; return o;
+        });
+        state.loaded = true;
+        render();
+      }, function () {
+        if (!usingLocal) { db = null; startLocal(); }
+      });
+    } catch (e) { db = null; startLocal(); }
+  }
+
+  function freshDoc(w) {
+    var now = Date.now();
+    return {
+      spanish: w.spanish, english: w.english, note: w.note || "",
+      box: 1, createdAt: now, dueAt: now, lastReviewed: null,
+      timesSeen: 0, timesCorrect: 0, streak: 0
+    };
+  }
+  async function addWord(w) {
+    var doc = freshDoc(w);
+    if (db) { await db.collection("words").add(doc); }
+    else {
+      doc.id = "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      state.words.push(doc); saveLocal(); render();
+    }
+    return doc;
+  }
+  async function updateWord(id, patch) {
+    var local = state.words.find(function (x) { return x.id === id; });
+    if (local) for (var k in patch) local[k] = patch[k];
+    if (db) { try { await db.doc("words/" + id).update(patch); } catch (e) {} }
+    else { saveLocal(); render(); }
+  }
+  async function deleteWord(id) {
+    if (db) { try { await db.doc("words/" + id).delete(); } catch (e) {} }
+    else { state.words = state.words.filter(function (x) { return x.id !== id; }); saveLocal(); render(); }
+  }
+
+  /* ---------- helpers ---------- */
+  function shuffle(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function stripAccents(s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  function norm(s) {
+    return stripAccents(String(s).toLowerCase().trim())
+      .replace(/[.!?¿¡,;:"'()]/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/^(to|a|an|the)\s+/, "")
+      .trim();
+  }
+  function answerList(english) {
+    return String(english).split(/\/|;| or /i).map(norm).filter(Boolean);
+  }
+  function lev(a, b) {
+    var m = a.length, n = b.length, i, j;
+    if (!m) return n; if (!n) return m;
+    var prev = []; for (j = 0; j <= n; j++) prev[j] = j;
+    for (i = 1; i <= m; i++) {
+      var cur = [i];
+      for (j = 1; j <= n; j++) {
+        var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+  function grade(input, english) {
+    var gi = norm(input);
+    if (!gi) return "blank";
+    var opts = answerList(english);
+    if (opts.indexOf(gi) !== -1) return "correct";
+    for (var i = 0; i < opts.length; i++) {
+      var o = opts[i];
+      if (o.length >= 4 && lev(gi, o) <= 1) return "close";
+      if (o.length >= 6 && (o.indexOf(gi) === 0 || gi.indexOf(o) === 0) && Math.abs(o.length - gi.length) <= 2) return "close";
+    }
+    return "wrong";
+  }
+  function rel(ms) {
+    var d = ms - Date.now();
+    if (d <= 0) return "now";
+    var mins = Math.round(d / 60000);
+    if (mins < 60) return "in " + mins + "m";
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return "in " + hrs + "h";
+    var days = Math.round(hrs / 24);
+    if (days < 14) return "in " + days + "d";
+    return "in " + Math.round(days / 7) + "w";
+  }
+  function dueWords() {
+    var n = Date.now();
+    return state.words.filter(function (w) { return (w.dueAt || 0) <= n; });
+  }
+  function splitPair(line) {
+    var m = line.match(/^(.+?)\s*(?:\t|[–—-]|=|\||:)\s*(.+)$/);
+    if (m) return [m[1].trim(), m[2].trim()];
+    m = line.match(/^(.+?)\s*,\s*(.+)$/);
+    if (m) return [m[1].trim(), m[2].trim()];
+    return [line.trim(), ""];
+  }
+  function existingKeys() {
+    var set = {};
+    state.words.forEach(function (w) { set[norm(w.spanish)] = true; });
+    return set;
+  }
+
+  /* ---------- review session ---------- */
+  function startSession(practice) {
+    var pool = practice ? state.words.slice() : dueWords();
+    if (!pool.length) return;
+    state.session = {
+      queue: shuffle(pool.map(function (w) { return w.id; })),
+      requeue: [], current: null, phase: "prompt", result: null,
+      reviewed: {}, correctFirst: {}, wrongEver: {},
+      total: pool.length, practice: !!practice
+    };
+    nextCard();
+  }
+  function endSession() { state.session = null; render(); }
+  function nextCard() {
+    var s = state.session;
+    if (!s.queue.length && s.requeue.length) { s.queue = shuffle(s.requeue); s.requeue = []; }
+    if (!s.queue.length) { s.current = null; s.phase = "done"; render(); return; }
+    s.current = s.queue.shift();
+    s.phase = "prompt"; s.result = null;
+    render();
+    setTimeout(function () { var i = $("#answer"); if (i) i.focus(); }, 30);
+  }
+  function applyResult(w, correct) {
+    var s = state.session;
+    var firstTime = !s.reviewed[w.id];
+    s.reviewed[w.id] = true;
+    var box = w.box || 1;
+    if (correct) {
+      if (firstTime && !s.wrongEver[w.id]) s.correctFirst[w.id] = true;
+      box = Math.min(MAXBOX, box + 1);
+    } else {
+      s.wrongEver[w.id] = true;
+      delete s.correctFirst[w.id];
+      box = 1;
+      s.requeue.push(w.id);
+    }
+    var now = Date.now();
+    updateWord(w.id, {
+      box: box,
+      dueAt: now + INTERVALS[box],
+      lastReviewed: now,
+      timesSeen: (w.timesSeen || 0) + 1,
+      timesCorrect: (w.timesCorrect || 0) + (correct ? 1 : 0),
+      streak: correct ? (w.streak || 0) + 1 : 0
+    });
+  }
+  function submitAnswer(val) {
+    var s = state.session;
+    var w = state.words.find(function (x) { return x.id === s.current; });
+    if (!w) { nextCard(); return; }
+    var g = grade(val, w.english);
+    if (g === "blank") return;
+    s.result = { grade: g, input: val, wordId: w.id };
+    s.phase = "result";
+    if (g === "correct") applyResult(w, true);
+    else if (g === "wrong") applyResult(w, false);
+    render();
+    setTimeout(function () { var b = $("#continue"); if (b) b.focus(); }, 30);
+  }
+  function resolveClose(correct) {
+    var s = state.session;
+    var w = state.words.find(function (x) { return x.id === s.result.wordId; });
+    if (w) applyResult(w, correct);
+    s.result.grade = correct ? "correct" : "wrong";
+    s.result.resolved = true;
+    render();
+    setTimeout(function () { var b = $("#continue"); if (b) b.focus(); }, 30);
+  }
+
+  /* ---------- render ---------- */
+  function pips(box) {
+    var h = '<div class="pips">';
+    for (var i = 1; i <= MAXBOX; i++) {
+      var cls = "pip" + (i <= box ? (box === MAXBOX ? " max" : " on") : "");
+      h += '<span class="' + cls + '"></span>';
+    }
+    return h + "</div>";
+  }
+  function miniPips(box) {
+    var h = '<div class="minipips" title="' + BOXNAME[box] + '">';
+    for (var i = 1; i <= MAXBOX; i++) {
+      var cls = "minipip" + (i <= box ? (box === MAXBOX ? " max" : " on") : "");
+      h += '<span class="' + cls + '"></span>';
+    }
+    return h + "</div>";
+  }
+
+  function render() {
+    var due = dueWords();
+    var badge = document.getElementById("dueCount");
+    if (badge) {
+      if (due.length) { badge.hidden = false; badge.textContent = due.length; }
+      else badge.hidden = true;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function (b) {
+      b.setAttribute("aria-current", b.dataset.route === state.route ? "true" : "false");
+    });
+    try { localStorage.setItem(RKEY, state.route); } catch (e) {}
+
+    if (!state.loaded) { app.innerHTML = '<div class="wrap"><div class="skeleton"></div></div>'; return; }
+    if (state.route === "review") return renderReview(due);
+    if (state.route === "add") return renderAdd();
+    return renderAll();
+  }
+
+  function renderReview(due) {
+    var s = state.session;
+    if (s && s.phase !== "done") return renderCard();
+    if (s && s.phase === "done") return renderSummary();
+
+    var h = '<div class="wrap">';
+    if (!state.words.length) {
+      h += '<div class="empty">' +
+        '<h2>Start your word list</h2>' +
+        '<p>After each Spanish class, add the words you wrote down. Come back here to be quizzed on the ones that are due — words you miss keep coming back until they stick.</p>' +
+        '<button class="btn primary" data-go="add">Add your first words</button>' +
+        '<div class="card review example" aria-hidden="true">' +
+          '<div class="ex-tag">Example</div>' +
+          pips(2) +
+          '<div class="prompt-label label">Spanish</div>' +
+          '<div class="prompt-word">la mariposa</div>' +
+          '<div class="textin" style="opacity:.7">butterfly</div>' +
+          '<div class="result ok mini">¡Correcto! — moves up a box, hidden from review for a day.</div>' +
+        '</div>' +
+      '</div>';
+    } else if (!due.length) {
+      var next = state.words.reduce(function (m, w) { return Math.min(m, w.dueAt || Infinity); }, Infinity);
+      h += '<div class="card review stack">' +
+        '<h2>All caught up</h2>' +
+        '<p class="muted">Nothing is due right now. Next words are ready ' + esc(rel(next)) + '.</p>' +
+        '<div class="btn-row"><button class="btn" data-practice="1">Practice all ' + state.words.length + '</button></div>' +
+      '</div>';
+    } else {
+      h += '<div class="card review stack">' +
+        '<div class="label">Ready to review</div>' +
+        '<div class="prompt-word">' + due.length + '</div>' +
+        '<p class="muted">word' + (due.length === 1 ? "" : "s") + ' due. Type the English meaning; miss one and it comes back before the session ends.</p>' +
+        '<div class="btn-row">' +
+          '<button class="btn primary" data-start="1">Start review</button>' +
+          (state.words.length > due.length ? '<button class="btn" data-practice="1">Practice all ' + state.words.length + '</button>' : "") +
+        '</div>' +
+      '</div>';
+    }
+    h += "</div>";
+    app.innerHTML = h;
+  }
+
+  function renderCard() {
+    var s = state.session;
+    var w = state.words.find(function (x) { return x.id === s.current; });
+    if (!w) { nextCard(); return; }
+    var answered = Object.keys(s.reviewed).length;
+    var remaining = s.queue.length + s.requeue.length + (s.phase === "prompt" ? 1 : 0);
+    var pct = Math.round((answered / (answered + remaining || 1)) * 100);
+
+    var h = '<div class="wrap"><div class="card review">';
+    h += pips(w.box || 1);
+    h += '<div class="prompt-label label">' + (s.practice ? "Practice · Spanish" : "Spanish") + '</div>';
+    h += '<div class="prompt-word">' + esc(w.spanish) + "</div>";
+    if (w.note) {
+      h += '<button class="hintbtn" id="hintbtn">Show hint</button>';
+      h += '<div class="hint" id="hint" hidden>' + esc(w.note) + "</div>";
+    }
+
+    if (s.phase === "prompt") {
+      h += '<form class="answer-form" id="af">' +
+        '<input class="textin" id="answer" placeholder="English meaning…" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+        '<button class="btn primary" type="submit">Check</button>' +
+      '</form>';
+    } else {
+      var g = s.result.grade;
+      var cls = g === "correct" ? "ok" : (g === "close" && !s.result.resolved ? "close" : "bad");
+      var head = g === "correct" ? "¡Correcto!" : (g === "close" && !s.result.resolved ? "So close" : "Not quite");
+      h += '<div class="result ' + cls + '">' +
+        '<div class="result-head">' + head + "</div>";
+      if (g !== "correct") {
+        h += '<div class="row"><span class="k">You wrote</span><span class="mono">' + esc(s.result.input || "—") + "</span></div>";
+      }
+      h += '<div class="row"><span class="k">Answer</span><span class="answer">' + esc(w.english) + "</span></div>";
+      if (w.note) h += '<div class="note">' + esc(w.note) + "</div>";
+      if (g === "close" && !s.result.resolved) {
+        h += '<div class="confirm">' +
+          '<button class="btn sm" id="hadit">I had it</button>' +
+          '<button class="btn ghost sm" id="missed">Mark wrong</button>' +
+        '</div>';
+      } else {
+        h += '<button class="btn primary" id="continue" style="margin-top:14px">Continue</button>';
+      }
+      h += "</div>";
+    }
+
+    h += '<div class="progress"><i style="width:' + pct + '%"></i></div>';
+    h += '<div class="rev-meta"><span>reviewed ' + answered + '</span><span>remaining ' + remaining + '</span>' +
+         '<button class="btn ghost sm" id="endbtn" style="padding:2px 8px">End</button></div>';
+    h += "</div></div>";
+    app.innerHTML = h;
+
+    var hb = $("#hintbtn");
+    if (hb) hb.onclick = function () { var el = $("#hint"); el.hidden = !el.hidden; hb.textContent = el.hidden ? "Show hint" : "Hide hint"; };
+    var af = $("#af");
+    if (af) af.onsubmit = function (e) { e.preventDefault(); submitAnswer($("#answer").value); };
+    var cont = $("#continue");
+    if (cont) cont.onclick = nextCard;
+    var hadit = $("#hadit");
+    if (hadit) hadit.onclick = function () { resolveClose(true); };
+    var missed = $("#missed");
+    if (missed) missed.onclick = function () { resolveClose(false); };
+    var endb = $("#endbtn");
+    if (endb) endb.onclick = endSession;
+  }
+
+  function renderSummary() {
+    var s = state.session;
+    var reviewed = Object.keys(s.reviewed).length;
+    var first = Object.keys(s.correctFirst).length;
+    var acc = reviewed ? Math.round((first / reviewed) * 100) : 0;
+    var next = state.words.reduce(function (m, w) { return Math.min(m, w.dueAt || Infinity); }, Infinity);
+    var stillDue = dueWords().length;
+    var h = '<div class="wrap"><div class="card review stack">' +
+      '<div class="label">Session complete</div>' +
+      '<div class="prompt-word">' + first + "/" + reviewed + "</div>" +
+      '<p class="muted">right on the first try (' + acc + '%). ' +
+        (next < Infinity ? "Next words ready " + esc(rel(next)) + "." : "") + '</p>' +
+      '<div class="btn-row">' +
+        (stillDue ? '<button class="btn primary" data-start="1">Review ' + stillDue + ' more</button>' : "") +
+        '<button class="btn" data-practice="1">Practice all</button>' +
+        '<button class="btn ghost" data-go="all">See all words</button>' +
+      '</div>' +
+    '</div></div>';
+    app.innerHTML = h;
+    state.session = null;
+  }
+
+  /* ---------- add ---------- */
+  function renderAdd() {
+    var h = '<div class="wrap">';
+    h += '<div class="seg" id="seg">' +
+      '<button data-m="single"' + (state.addMode === "single" ? ' aria-current="true"' : "") + ">One at a time</button>" +
+      '<button data-m="bulk"' + (state.addMode === "bulk" ? ' aria-current="true"' : "") + ">Paste a list</button>" +
+    '</div>';
+
+    if (state.addMode === "single") {
+      h += '<form id="single-form" class="card">' +
+        '<div class="field"><label class="label" for="f-es">Spanish word</label>' +
+          '<input id="f-es" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="hablar" required></div>' +
+        '<div class="field"><label class="label" for="f-en">English meaning</label>' +
+          '<input id="f-en" autocomplete="off" placeholder="to speak" required></div>' +
+        '<div class="field"><label class="label" for="f-note">Note <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label>' +
+          '<input id="f-note" autocomplete="off" placeholder="example sentence, gender, false friend…"></div>' +
+        '<button class="btn primary" type="submit">Add word</button>' +
+        (state.toast ? '<div class="toast">' + esc(state.toast) + "</div>" : "") +
+      '</form>';
+      if (state.lastAdded.length) {
+        h += '<div class="recent"><div class="label" style="margin-bottom:6px">Added this session</div><ul>';
+        state.lastAdded.slice(0, 8).forEach(function (w) {
+          h += "<li><span class='es'>" + esc(w.spanish) + "</span><span class='muted'>" + esc(w.english) + "</span></li>";
+        });
+        h += "</ul></div>";
+      }
+    } else {
+      h += '<div class="card">' +
+        '<div class="field"><label class="label" for="bulk">Paste words — one per line</label>' +
+          '<textarea id="bulk" placeholder="hablar - to speak&#10;la casa - the house&#10;el perro = dog&#10;correr, to run">' + esc(state.bulkText) + "</textarea></div>" +
+        '<p class="helptext">Separate the Spanish word and its meaning with a dash, tab, <span class="mono">=</span>, <span class="mono">:</span>, or a comma. Duplicates you already have are skipped.</p>';
+      var rows = state.bulkText.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
+        var p = splitPair(l);
+        return { spanish: p[0], english: p[1] };
+      });
+      var keys = existingKeys(), seen = {};
+      var okRows = [], dupRows = [], badRows = [];
+      rows.forEach(function (r) {
+        var k = norm(r.spanish);
+        if (!r.spanish || !r.english) badRows.push(r);
+        else if (keys[k] || seen[k]) dupRows.push(r);
+        else { seen[k] = true; okRows.push(r); }
+      });
+      if (rows.length) {
+        h += '<table class="preview-table"><thead><tr><th>Spanish</th><th>Meaning</th><th></th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var k = norm(r.spanish), rowcls = "", tag = "";
+          if (!r.spanish || !r.english) { rowcls = "bad"; tag = '<span class="tag">need both</span>'; }
+          else if (keys[k]) { rowcls = "dup"; tag = '<span class="tag">already saved</span>'; }
+          h += '<tr class="' + rowcls + '"><td class="es">' + esc(r.spanish || "—") + "</td><td>" + esc(r.english || "—") + "</td><td>" + tag + "</td></tr>";
+        });
+        h += "</tbody></table>";
+        h += '<button class="btn primary" id="import-btn"' + (okRows.length ? "" : " disabled") + ">Import " + okRows.length + " word" + (okRows.length === 1 ? "" : "s") + "</button>";
+        if (dupRows.length || badRows.length) {
+          h += '<span class="muted" style="margin-left:10px;font-size:.82rem">' +
+            (dupRows.length ? dupRows.length + " skipped" : "") +
+            (dupRows.length && badRows.length ? " · " : "") +
+            (badRows.length ? badRows.length + " incomplete" : "") + "</span>";
+        }
+      }
+      if (state.toast) h += '<div class="toast">' + esc(state.toast) + "</div>";
+      h += "</div>";
+    }
+    h += "</div>";
+    app.innerHTML = h;
+
+    var seg = $("#seg");
+    seg.onclick = function (e) {
+      var b = e.target.closest("button[data-m]");
+      if (!b) return;
+      state.addMode = b.dataset.m; state.toast = ""; render();
+    };
+
+    var sf = $("#single-form");
+    if (sf) {
+      sf.onsubmit = function (e) {
+        e.preventDefault();
+        var es = $("#f-es").value.trim(), en = $("#f-en").value.trim(), note = $("#f-note").value.trim();
+        if (!es || !en) return;
+        var dup = existingKeys()[norm(es)];
+        addWord({ spanish: es, english: en, note: note });
+        state.lastAdded.unshift({ spanish: es, english: en });
+        state.toast = (dup ? "Added “" + es + "” (you already had one like it)" : "Added “" + es + "”");
+        render();
+        setTimeout(function () { var f = $("#f-es"); if (f) f.focus(); }, 20);
+      };
+      setTimeout(function () { var f = $("#f-es"); if (f) f.focus(); }, 20);
+    }
+
+    var bulk = $("#bulk");
+    if (bulk) {
+      bulk.oninput = function () { state.bulkText = bulk.value; state.toast = ""; render(); };
+    }
+    var ib = $("#import-btn");
+    if (ib) {
+      ib.onclick = async function () {
+        var lines = state.bulkText.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+        var keys = existingKeys(), seen = {}, toAdd = [];
+        lines.forEach(function (l) {
+          var p = splitPair(l), k = norm(p[0]);
+          if (p[0] && p[1] && !keys[k] && !seen[k]) { seen[k] = true; toAdd.push({ spanish: p[0], english: p[1] }); }
+        });
+        if (!toAdd.length) return;
+        ib.disabled = true; ib.textContent = "Importing…";
+        for (var i = 0; i < toAdd.length; i++) { await addWord(toAdd[i]); }
+        toAdd.forEach(function (w) { state.lastAdded.unshift(w); });
+        state.bulkText = "";
+        state.toast = "Imported " + toAdd.length + " word" + (toAdd.length === 1 ? "" : "s") + ".";
+        state.addMode = "single";
+        render();
+      };
+    }
+  }
+
+  /* ---------- all words ---------- */
+  function renderAll() {
+    var words = state.words.slice();
+    var total = words.length;
+    var due = dueWords().length;
+    var mastered = words.filter(function (w) { return (w.box || 1) === MAXBOX; }).length;
+    var seen = words.reduce(function (a, w) { return a + (w.timesSeen || 0); }, 0);
+    var corr = words.reduce(function (a, w) { return a + (w.timesCorrect || 0); }, 0);
+    var acc = seen ? Math.round((corr / seen) * 100) + "%" : "—";
+
+    var q = norm(state.search);
+    var list = words.filter(function (w) {
+      if (!q) return true;
+      return norm(w.spanish).indexOf(q) !== -1 || norm(w.english).indexOf(q) !== -1 || norm(w.note || "").indexOf(q) !== -1;
+    });
+    var sort = state.sort;
+    list.sort(function (a, b) {
+      if (sort === "recent") return (b.createdAt || 0) - (a.createdAt || 0);
+      if (sort === "alpha") return String(a.spanish).localeCompare(String(b.spanish), "es");
+      if (sort === "box") return (a.box || 1) - (b.box || 1) || (a.dueAt || 0) - (b.dueAt || 0);
+      if (sort === "due") return (a.dueAt || 0) - (b.dueAt || 0);
+      if (sort === "accuracy") {
+        var aa = a.timesSeen ? a.timesCorrect / a.timesSeen : -1;
+        var bb = b.timesSeen ? b.timesCorrect / b.timesSeen : -1;
+        return aa - bb;
+      }
+      return 0;
+    });
+
+    var h = '<div class="wide">';
+    h += '<div class="statbar">' +
+      '<div class="stat"><div class="n">' + total + '</div><div class="t">Words</div></div>' +
+      '<div class="stat"><div class="n warm">' + due + '</div><div class="t">Due now</div></div>' +
+      '<div class="stat"><div class="n ok">' + mastered + '</div><div class="t">Mastered</div></div>' +
+      '<div class="stat"><div class="n">' + acc + '</div><div class="t">Accuracy</div></div>' +
+    '</div>';
+
+    if (!total) {
+      h += '<div class="card center"><p class="muted" style="margin:0">No words yet. <button class="btn sm" data-go="add" style="margin-left:6px">Add some</button></p></div></div>';
+      app.innerHTML = h;
+      bindAll();
+      return;
+    }
+
+    h += '<div class="toolrow">' +
+      '<input class="search" id="search" placeholder="Search words…" value="' + esc(state.search) + '">' +
+      '<select class="sort" id="sort">' +
+        opt("recent", "Recently added", sort) +
+        opt("alpha", "A – Z", sort) +
+        opt("box", "Needs work first", sort) +
+        opt("due", "Due soonest", sort) +
+        opt("accuracy", "Lowest accuracy", sort) +
+      '</select>' +
+    '</div>';
+
+    h += '<div class="wordlist">';
+    if (!list.length) h += '<div class="wrow"><span class="muted">No matches.</span></div>';
+    list.forEach(function (w) {
+      var id = w.id;
+      if (state.editingId === id) {
+        h += '<div class="wrow" style="display:block">' +
+          '<div class="edit-grid">' +
+            '<input id="e-es-' + id + '" value="' + esc(w.spanish) + '" placeholder="Spanish">' +
+            '<input id="e-en-' + id + '" value="' + esc(w.english) + '" placeholder="English">' +
+            '<input class="full" id="e-note-' + id + '" value="' + esc(w.note || "") + '" placeholder="Note (optional)">' +
+          '</div>' +
+          '<div class="edit-actions">' +
+            '<button class="btn primary sm" data-save="' + id + '">Save</button>' +
+            '<button class="btn ghost sm" data-cancel="1">Cancel</button>' +
+            '<button class="btn danger sm" data-del="' + id + '" style="margin-left:auto">Delete</button>' +
+          '</div>' +
+        '</div>';
+      } else {
+        var acc1 = w.timesSeen ? Math.round((w.timesCorrect / w.timesSeen) * 100) + "%" : "new";
+        var dueTxt = (w.dueAt || 0) <= Date.now() ? '<span class="due-now">due now</span>' : "due " + esc(rel(w.dueAt || 0));
+        h += '<div class="wrow">' +
+          '<div><div class="es">' + esc(w.spanish) + "</div>" +
+            (w.note ? '<span class="note">' + esc(w.note) + "</span>" : "") + "</div>" +
+          '<div class="en">' + esc(w.english) + "</div>" +
+          '<div class="meta">' + miniPips(w.box || 1) +
+            '<span class="mono">' + acc1 + (w.timesSeen ? " · " + w.timesSeen + "×" : "") + "</span>" +
+            "<span>" + dueTxt + "</span>" +
+            '<span class="acts"><button class="icon-btn" data-edit="' + id + '">Edit</button></span>' +
+          "</div>" +
+        "</div>";
+      }
+    });
+    h += "</div></div>";
+    app.innerHTML = h;
+    bindAll();
+  }
+  function opt(v, t, cur) { return '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + t + "</option>"; }
+
+  function bindAll() {
+    var s = $("#search");
+    if (s) s.oninput = function () { state.search = s.value; var p = s.selectionStart; render(); var n = $("#search"); if (n) { n.focus(); try { n.setSelectionRange(p, p); } catch (e) {} } };
+    var so = $("#sort");
+    if (so) so.onchange = function () { state.sort = so.value; render(); };
+    app.querySelectorAll("[data-edit]").forEach(function (b) { b.onclick = function () { state.editingId = b.dataset.edit; render(); }; });
+    app.querySelectorAll("[data-cancel]").forEach(function (b) { b.onclick = function () { state.editingId = null; render(); }; });
+    app.querySelectorAll("[data-save]").forEach(function (b) {
+      b.onclick = function () {
+        var id = b.dataset.save;
+        var es = $("#e-es-" + id).value.trim(), en = $("#e-en-" + id).value.trim(), note = $("#e-note-" + id).value.trim();
+        if (!es || !en) return;
+        updateWord(id, { spanish: es, english: en, note: note });
+        state.editingId = null; render();
+      };
+    });
+    app.querySelectorAll("[data-del]").forEach(function (b) {
+      b.onclick = function () { deleteWord(b.dataset.del); state.editingId = null; render(); };
+    });
+  }
+
+  /* ---------- global events ---------- */
+  document.getElementById("nav").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-route]");
+    if (!b) return;
+    state.route = b.dataset.route; state.toast = ""; render();
+  });
+  app.addEventListener("click", function (e) {
+    var go = e.target.closest("[data-go]");
+    if (go) { state.route = go.dataset.go; render(); return; }
+    if (e.target.closest("[data-start]")) { startSession(false); return; }
+    if (e.target.closest("[data-practice]")) { startSession(true); return; }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || state.route !== "review") return;
+    var s = state.session;
+    if (s && s.phase === "result" && s.result && (s.result.grade !== "close" || s.result.resolved)) {
+      e.preventDefault(); nextCard();
+    }
+  });
+
+  render();
+  initStorage();
+})();
+</script>
