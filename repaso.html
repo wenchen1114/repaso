@@ -241,6 +241,9 @@
   .imp-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--muted); cursor: pointer; margin: 10px 0 0; }
   .imp-toggle input { accent-color: var(--warm); width: 15px; height: 15px; }
   .backup { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; font-size: .8rem; color: var(--faint); }
+  .syncbox { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface-2); }
+  .syncbox textarea#fb-config-input { width: 100%; margin-top: 8px; font-family: "IBM Plex Mono", monospace; font-size: .8rem; padding: 9px 11px; border: 1.5px solid var(--hair-strong); border-radius: 8px; background: var(--surface); outline: none; }
+  .synccode { font-family: "IBM Plex Mono", monospace; font-size: 1.05rem; letter-spacing: .04em; background: var(--surface); border: 1px dashed var(--hair-strong); border-radius: 8px; padding: 10px 14px; word-break: break-all; }
 
   .toolrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
   .search { flex: 1; min-width: 180px; padding: 9px 13px; border: 1.5px solid var(--hair-strong); border-radius: 9px; background: var(--surface); outline: none; }
@@ -311,8 +314,21 @@
   var BOXNAME = ["", "Learning", "Getting it", "Familiar", "Strong", "Mastered"];
   var LKEY = "repaso.words.v1";
   var RKEY = "repaso.route";
+  var SYNC_KEY = "repaso.syncCode";
+  var FB_CONFIG_KEY = "repaso.firebaseConfig";
+  // Fill this in (see README → Cloud sync) to give the standalone /
+  // GitHub Pages copy of this file optional cross-device sync of its own,
+  // independent of the Claude Artifact's account sync. It's not a secret —
+  // a Firebase web config is meant to be public; access is controlled by
+  // Firestore security rules, not by hiding this object. A viewer can also
+  // paste their own config in at runtime (All words → Cloud sync), which
+  // is saved to their browser instead of this file.
+  var FIREBASE_CONFIG = null;
 
-  var db = null, usingLocal = false;
+  var db = null;                 // Claude Artifacts `db` capability
+  var mode = "local";             // "claude" | "firebase" | "local"
+  var fireApp = null, fireDb = null, unsubFire = null, syncCode = null;
+  var activeFbConfig = null;
   var state = {
     route: "review",
     words: [],
@@ -324,7 +340,9 @@
     search: "",
     sort: "recent",
     editingId: null,
-    toast: ""
+    toast: "",
+    showNewCode: null,
+    syncMsg: ""
   };
 
   try { var r = localStorage.getItem(RKEY); if (r) state.route = r; } catch (e) {}
@@ -348,31 +366,163 @@
   function setStorePill() {
     var d = $("#storepill .d"), t = $("#storetext");
     if (!d) return;
-    if (usingLocal) { d.classList.add("local"); t.textContent = "Saved in this browser only — use Backup ▸ Export / Import to move words between devices"; }
-    else { d.classList.remove("local"); t.textContent = "Synced to your Claude account — open this same link on any device to see every word"; }
+    d.classList.remove("local");
+    if (mode === "claude") { t.textContent = "Synced to your Claude account — open this same link on any device to see every word"; }
+    else if (mode === "firebase") { t.textContent = "Synced via cloud code — enter the same code on another device to see every word"; }
+    else { d.classList.add("local"); t.textContent = "Saved in this browser only — use Cloud sync or Backup ▸ Export/Import to move words between devices"; }
   }
 
   function startLocal() {
-    usingLocal = true; loadLocal(); state.loaded = true; setStorePill(); render();
+    mode = "local"; loadLocal(); state.loaded = true; setStorePill(); render();
+  }
+
+  function loadFbConfig() {
+    try {
+      var raw = localStorage.getItem(FB_CONFIG_KEY);
+      if (raw) { activeFbConfig = JSON.parse(raw); return; }
+    } catch (e) {}
+    activeFbConfig = FIREBASE_CONFIG;
   }
 
   async function initStorage() {
+    loadFbConfig();
     var claudeObj = (typeof window !== "undefined" && window.claude && typeof window.claude.use === "function") ? window.claude : null;
-    if (!claudeObj) { startLocal(); return; }
-    try { db = await claudeObj.use("db"); } catch (e) { db = null; }
-    if (!db) { startLocal(); return; }
-    setStorePill();
+    if (claudeObj) {
+      try { db = await claudeObj.use("db"); } catch (e) { db = null; }
+      if (db) {
+        mode = "claude";
+        setStorePill();
+        try {
+          db.collection("words").onSnapshot(function (snap) {
+            state.words = snap.docs.map(function (d) {
+              var o = d.data() || {}; o.id = d.id; return o;
+            });
+            state.loaded = true;
+            render();
+          }, function () {
+            if (mode === "claude") { db = null; startLocal(); }
+          });
+        } catch (e) { db = null; startLocal(); }
+        return;
+      }
+    }
+    // Not running inside a Claude Artifact (or its db is unavailable) —
+    // reconnect to cloud sync if this device already joined one.
+    var code = null;
+    try { code = localStorage.getItem(SYNC_KEY); } catch (e) {}
+    if (activeFbConfig && code) {
+      var ok = await tryStartFirebase(code);
+      if (ok) return;
+    }
+    startLocal();
+  }
+
+  /* ---------- optional cloud sync (Firebase) for the standalone copy ---------- */
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src; s.onload = function () { resolve(); }; s.onerror = function () { reject(new Error("load failed: " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  async function ensureFirebaseSdk() {
+    if (typeof firebase !== "undefined") return true;
     try {
-      db.collection("words").onSnapshot(function (snap) {
-        state.words = snap.docs.map(function (d) {
-          var o = d.data() || {}; o.id = d.id; return o;
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-compat.min.js");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-firestore-compat.min.js");
+      return typeof firebase !== "undefined";
+    } catch (e) { return false; }
+  }
+  function fireWords() { return fireDb.collection("synced/" + syncCode + "/words"); }
+  function genSyncCode() {
+    var bytes = new Uint8Array(15);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    var alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // no 0/O/1/I ambiguity
+    var s = "";
+    for (var i = 0; i < bytes.length; i++) s += alphabet[bytes[i] % alphabet.length];
+    return s.match(/.{1,4}/g).join("-");
+  }
+  // The sync status line lives in state (not the DOM) so it survives the
+  // re-render that follows almost every call here — setting it right before
+  // a render() that rebuilds the box would otherwise erase it immediately.
+  function setSyncMsg(t) { state.syncMsg = t; }
+  // Resolves once the FIRST snapshot for this code has arrived, so callers
+  // can safely read state.words as the true cloud state before merging
+  // anything local into it (avoids a race that could drop words).
+  async function tryStartFirebase(code) {
+    if (!activeFbConfig) return false;
+    var ok = await ensureFirebaseSdk();
+    if (!ok) { setSyncMsg("Couldn't load the sync library — check your connection."); return false; }
+    try {
+      if (!fireApp) { fireApp = firebase.initializeApp(activeFbConfig); fireDb = firebase.firestore(); }
+      if (unsubFire) { unsubFire(); unsubFire = null; }
+      syncCode = code;
+      mode = "firebase";
+      return await new Promise(function (resolve) {
+        var first = true;
+        unsubFire = fireWords().onSnapshot(function (snap) {
+          state.words = snap.docs.map(function (d) { var o = d.data() || {}; o.id = d.id; return o; });
+          state.loaded = true;
+          setStorePill();
+          render();
+          if (first) { first = false; resolve(true); }
+        }, function () {
+          setSyncMsg("Sync connection lost — check the code and your connection.");
+          render();
+          if (first) { first = false; resolve(false); }
         });
-        state.loaded = true;
-        render();
-      }, function () {
-        if (!usingLocal) { db = null; startLocal(); }
       });
-    } catch (e) { db = null; startLocal(); }
+    } catch (e) {
+      mode = "local";
+      return false;
+    }
+  }
+  async function connectSyncCode(code) {
+    var ok = await tryStartFirebase(code);
+    if (ok) { try { localStorage.setItem(SYNC_KEY, code); } catch (e) {} }
+    return ok;
+  }
+  async function createSyncCode() {
+    var localWords = (mode === "local") ? state.words.slice() : [];
+    var code = genSyncCode();
+    setSyncMsg("Creating…"); render();
+    var ok = await connectSyncCode(code);
+    if (ok) {
+      for (var i = 0; i < localWords.length; i++) { await importWord(localWords[i]); }
+      state.showNewCode = code;
+      setSyncMsg(localWords.length ? ("Connected — moved " + localWords.length + " word(s) from this device.") : "Connected.");
+    }
+    render();
+  }
+  async function joinSyncCode(code) {
+    code = code.trim();
+    if (!code) return;
+    var localWords = (mode === "local") ? state.words.slice() : [];
+    setSyncMsg("Connecting…"); render();
+    var ok = await connectSyncCode(code);
+    if (ok) {
+      for (var i = 0; i < localWords.length; i++) { await importWord(localWords[i]); }
+      setSyncMsg(localWords.length ? ("Connected — merged " + localWords.length + " word(s) from this device.") : "Connected.");
+    } else {
+      setSyncMsg("Couldn't connect — double check the code and try again.");
+    }
+    render();
+  }
+  function disconnectSync() {
+    try { localStorage.removeItem(SYNC_KEY); } catch (e) {}
+    if (unsubFire) { unsubFire(); unsubFire = null; }
+    mode = "local"; syncCode = null; state.showNewCode = null; state.syncMsg = "";
+    loadLocal(); state.loaded = true;
+    setStorePill(); render();
+  }
+  function saveFbConfigFromInput(raw) {
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { setSyncMsg("That doesn't look like valid JSON — paste the whole config object."); render(); return; }
+    if (!parsed || !parsed.apiKey || !parsed.projectId) { setSyncMsg("Missing apiKey/projectId — copy the full firebaseConfig object from your project settings."); render(); return; }
+    try { localStorage.setItem(FB_CONFIG_KEY, JSON.stringify(parsed)); } catch (e) {}
+    activeFbConfig = parsed;
+    setSyncMsg("Saved. Create or join a sync code below.");
+    render();
   }
 
   function freshDoc(w) {
@@ -392,11 +542,10 @@
     return String(existing) + " / " + String(incoming).trim();
   }
   async function insertDoc(doc) {
-    if (db) { await db.collection("words").add(doc); }
-    else {
-      doc.id = "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      state.words.push(doc); saveLocal(); render();
-    }
+    if (mode === "claude") { await db.collection("words").add(doc); return; }
+    if (mode === "firebase") { try { await fireWords().add(doc); } catch (e) {} return; }
+    doc.id = "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    state.words.push(doc); saveLocal(); render();
   }
   // A word you re-enter isn't a duplicate to reject — it's one you keep
   // meeting, so flag it important and put it back at the front of review.
@@ -445,12 +594,92 @@
   async function updateWord(id, patch) {
     var local = state.words.find(function (x) { return x.id === id; });
     if (local) for (var k in patch) local[k] = patch[k];
-    if (db) { try { await db.doc("words/" + id).update(patch); } catch (e) {} }
+    if (mode === "claude") { try { await db.doc("words/" + id).update(patch); } catch (e) {} }
+    else if (mode === "firebase") { try { await fireWords().doc(id).update(patch); } catch (e) {} }
     else { saveLocal(); render(); }
   }
   async function deleteWord(id) {
-    if (db) { try { await db.doc("words/" + id).delete(); } catch (e) {} }
+    if (mode === "claude") { try { await db.doc("words/" + id).delete(); } catch (e) {} }
+    else if (mode === "firebase") { try { await fireWords().doc(id).delete(); } catch (e) {} }
     else { state.words = state.words.filter(function (x) { return x.id !== id; }); saveLocal(); render(); }
+  }
+
+  /* ---------- cloud sync UI ---------- */
+  function syncBarHTML() {
+    if (mode === "claude") return ""; // the Claude Artifact already syncs via your account
+    if (mode === "firebase") {
+      var justCreated = state.showNewCode && state.showNewCode === syncCode;
+      return '<div class="syncbox">' +
+        '<div class="label" style="margin-bottom:6px">Cloud sync — connected</div>' +
+        '<p class="muted" style="margin:0 0 10px">' +
+          (justCreated
+            ? "Save this code somewhere safe, then enter it on your other devices to connect them."
+            : "Enter this code on another device to see the same words there.") +
+        '</p>' +
+        '<div class="synccode">' + esc(syncCode) + '</div>' +
+        '<div class="btn-row" style="justify-content:flex-start;margin-top:10px">' +
+          '<button class="btn sm" id="copy-code-btn">Copy code</button>' +
+          '<button class="btn ghost sm" id="disconnect-btn">Disconnect this device</button>' +
+        '</div>' +
+        (state.syncMsg ? '<span class="muted" style="display:block;margin-top:8px;font-size:.8rem">' + esc(state.syncMsg) + '</span>' : '') +
+      '</div>';
+    }
+    if (!activeFbConfig) {
+      return '<div class="syncbox">' +
+        '<div class="label" style="margin-bottom:6px">Cloud sync</div>' +
+        '<p class="muted" style="margin:0">Not set up for this copy — the standalone/GitHub Pages version needs a one-time Firebase project to sync live across devices (see the README). ' +
+        'Export/Import JSON above works right away without any setup.</p>' +
+        '<details style="margin-top:10px">' +
+          '<summary style="cursor:pointer;font-size:.82rem;color:var(--muted)">Set it up myself</summary>' +
+          '<p class="helptext">Paste the config object from Firebase Console → Project settings → General → Your apps → SDK setup and configuration.</p>' +
+          '<textarea id="fb-config-input" placeholder=\'{"apiKey": "…", "authDomain": "…", "projectId": "…", …}\' style="min-height:90px"></textarea>' +
+          '<button class="btn sm" id="fb-config-save" style="margin-top:8px">Save</button>' +
+        '</details>' +
+        (state.syncMsg ? '<span class="muted" style="display:block;margin-top:8px;font-size:.8rem">' + esc(state.syncMsg) + '</span>' : '') +
+      '</div>';
+    }
+    return '<div class="syncbox">' +
+      '<div class="label" style="margin-bottom:6px">Cloud sync</div>' +
+      '<p class="muted" style="margin:0 0 10px">Keep this device’s words in sync with your other devices automatically — no export/import needed.</p>' +
+      '<div class="btn-row" style="justify-content:flex-start">' +
+        '<button class="btn primary sm" id="create-code-btn">Create a new sync code</button>' +
+        '<button class="btn sm" id="join-code-btn">I have a code</button>' +
+      '</div>' +
+      '<div id="join-row" hidden style="margin-top:10px;display:flex;gap:8px">' +
+        '<input class="search" id="join-input" placeholder="Paste your sync code" style="flex:1">' +
+        '<button class="btn primary sm" id="join-confirm-btn">Connect</button>' +
+      '</div>' +
+      (state.syncMsg ? '<span class="muted" style="display:block;margin-top:8px;font-size:.8rem">' + esc(state.syncMsg) + '</span>' : '') +
+    '</div>';
+  }
+  function bindSyncBar() {
+    var ccb = $("#create-code-btn");
+    if (ccb) ccb.onclick = async function () { ccb.disabled = true; ccb.textContent = "Creating…"; await createSyncCode(); };
+    var jcb = $("#join-code-btn");
+    if (jcb) jcb.onclick = function () { var r = $("#join-row"); if (r) { r.hidden = false; var i = $("#join-input"); if (i) i.focus(); } };
+    var jinput = $("#join-input");
+    if (jinput) jinput.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); var b = $("#join-confirm-btn"); if (b) b.click(); } };
+    var jconf = $("#join-confirm-btn");
+    if (jconf) jconf.onclick = async function () {
+      var v = ($("#join-input") || {}).value || "";
+      if (!v.trim()) return;
+      jconf.disabled = true; jconf.textContent = "Connecting…";
+      await joinSyncCode(v);
+    };
+    var cpy = $("#copy-code-btn");
+    if (cpy) cpy.onclick = function () {
+      var done = function () { setSyncMsg("Copied."); render(); };
+      var fail = function () { setSyncMsg("Couldn't copy automatically — select the code and copy it manually."); render(); };
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(syncCode).then(done, fail); }
+      else { fail(); }
+    };
+    var disc = $("#disconnect-btn");
+    if (disc) disc.onclick = function () {
+      if (!confirm("Disconnect this device from cloud sync? It'll go back to saving words in this browser only.")) return;
+      disconnectSync();
+    };
+    var fbSave = $("#fb-config-save");
+    if (fbSave) fbSave.onclick = function () { var ta = $("#fb-config-input"); if (ta) saveFbConfigFromInput(ta.value.trim()); };
   }
 
   /* ---------- backup / restore ---------- */
@@ -1003,8 +1232,8 @@
     '</div>';
 
     if (!total) {
-      h += '<div class="card center"><p class="muted" style="margin:0">No words yet. <button class="btn sm" data-go="add" style="margin-left:6px">Add some</button>, or import a backup below.</p></div>' +
-        backupBarHTML() + '</div>';
+      h += '<div class="card center"><p class="muted" style="margin:0">No words yet. <button class="btn sm" data-go="add" style="margin-left:6px">Add some</button>, or connect/import below.</p></div>' +
+        syncBarHTML() + backupBarHTML() + '</div>';
       app.innerHTML = h;
       bindAll();
       return;
@@ -1055,7 +1284,7 @@
         "</div>";
       }
     });
-    h += "</div>" + backupBarHTML() + "</div>";
+    h += "</div>" + syncBarHTML() + backupBarHTML() + "</div>";
     app.innerHTML = h;
     bindAll();
   }
@@ -1087,6 +1316,7 @@
       ifb.onclick = function () { ifile.click(); };
       ifile.onchange = function () { if (ifile.files && ifile.files[0]) importJSON(ifile.files[0]); };
     }
+    bindSyncBar();
   }
 
   /* ---------- global events ---------- */

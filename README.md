@@ -73,6 +73,53 @@ Push this repo to GitHub, then in **Settings → Pages** set the source to the
 `https://<your-username>.github.io/repaso/repaso.html`
 (rename the file to `index.html` if you want it at the bare repo URL).
 
+## Cloud sync (optional, for the standalone/GitHub Pages copy)
+
+The Claude Artifact version already syncs automatically. This is for making the
+GitHub-hosted copy do the same, without manual Export/Import, using your own
+free Firebase project as the sync backend.
+
+**One-time setup (do this once, in a browser):**
+
+1. Go to [console.firebase.google.com](https://console.firebase.google.com) →
+   **Add project** → give it any name → you can decline Google Analytics.
+2. In the project: **Build → Firestore Database → Create database** → start in
+   **production mode** → pick any region.
+3. Open the **Rules** tab and replace the contents with:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /synced/{code}/words/{wordId} {
+         allow read, write: if code.size() >= 16;
+       }
+     }
+   }
+   ```
+   then **Publish**. This means anyone who knows a sync code can read/write the
+   words under it — there's no separate login. Treat a sync code like a
+   password: the app generates a long, random one, and only people you share it
+   with should have it.
+4. Go to **Project settings** (gear icon) → **General** → **Your apps** → click
+   the web icon (`</>`) → register an app (any nickname) → you'll see a
+   `firebaseConfig` object. Copy the whole thing.
+
+**Wire it into the app** — either:
+
+- Paste it into **All words → Cloud sync → Set it up myself** (saved to that
+  browser only, so repeat this on each device), or
+- Paste it to whoever maintains `repaso.html` to hardcode as the `FIREBASE_CONFIG`
+  constant near the top of the `<script>` — then it's baked in for every device,
+  and each device only needs the sync **code**, not the config.
+
+**Using it:** open **All words → Cloud sync** → **Create a new sync code** (do
+this once, on your first device — any words already on that device are moved
+in) → on every other device, **I have a code** and paste the same code. From
+then on, words added anywhere with that code show up everywhere, live.
+
+This is separate from the Claude Artifact's own account sync — the two don't
+share data with each other.
+
 ## Fonts
 
 Loads Fraunces, Hanken Grotesk, and IBM Plex Mono from Google Fonts at runtime,
