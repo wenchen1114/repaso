@@ -323,7 +323,14 @@
   // Firestore security rules, not by hiding this object. A viewer can also
   // paste their own config in at runtime (All words → Cloud sync), which
   // is saved to their browser instead of this file.
-  var FIREBASE_CONFIG = null;
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCwfhib8D_XB3XmW5bYTqDmZTx0OJ78YK8",
+    authDomain: "repaso-49fc1.firebaseapp.com",
+    projectId: "repaso-49fc1",
+    storageBucket: "repaso-49fc1.firebasestorage.app",
+    messagingSenderId: "900772848328",
+    appId: "1:900772848328:web:bd054084d641823915bbfd"
+  };
 
   var db = null;                 // Claude Artifacts `db` capability
   var mode = "local";             // "claude" | "firebase" | "local"
